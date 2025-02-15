@@ -387,12 +387,14 @@ func (r *SleepScheduleReconciler) loadSleepScheduleDataTime(ctx context.Context,
 			log.Error(err, "Failed to validate cron wake schedule")
 			return err
 		}
+		data.CronSchedule.WakeSchedule = sleepSchedule.Spec.CronSchedule.WakeSchedule
 		// Validate the cron sleep schedule
 		if !gron.IsValid(sleepSchedule.Spec.CronSchedule.SleepSchedule) {
 			err := fmt.Errorf("invalid cron sleep schedule: %s", sleepSchedule.Spec.CronSchedule.SleepSchedule)
 			log.Error(err, "Failed to validate cron sleep schedule")
 			return err
 		}
+		data.CronSchedule.SleepSchedule = sleepSchedule.Spec.CronSchedule.SleepSchedule
 	default:
 		err := fmt.Errorf("neither standardTime nor cronSchedule was provided")
 		log.Error(err, "neither standardTime nor cronSchedule was provided")
@@ -412,14 +414,18 @@ func (r *SleepScheduleReconciler) shouldSleep(ctx context.Context, data *SleepSc
 	// Handle either StandardTime or CronSchedule schedule types
 	switch {
 	case data.StandardTime != nil:
+		// Get fixed wake time
 		wakeDatetime = time.Date(now.Year(), now.Month(), now.Day(), data.StandardTime.WakeTime.Hour(), data.StandardTime.WakeTime.Minute(), 0, 0, data.Timezone)
+		// Get fixed sleep time
 		sleepDatetime = time.Date(now.Year(), now.Month(), now.Day(), data.StandardTime.SleepTime.Hour(), data.StandardTime.SleepTime.Minute(), 0, 0, data.Timezone)
 	case data.CronSchedule != nil:
+		// Get the next wake time
 		wakeDatetime, err = gronx.NextTickAfter(data.CronSchedule.WakeSchedule, now, false)
 		if err != nil {
 			log.Error(err, "Failed to check the next cron wake time")
 			return false, err
 		}
+		// Get the next sleep time
 		sleepDatetime, err = gronx.NextTickAfter(data.CronSchedule.SleepSchedule, now, false)
 		if err != nil {
 			log.Error(err, "Failed to check the next cron sleep time")
