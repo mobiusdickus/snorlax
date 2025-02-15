@@ -38,6 +38,22 @@ spec:
             type: object
           spec:
             properties:
+              cronSchedule:
+                description: The cron schedule that will be used to determine when
+                  the deployment will sleep/wake
+                properties:
+                  sleepSchedule:
+                    description: The cron schedule for when the deployment should
+                      go to sleep
+                    type: string
+                  wakeSchedule:
+                    description: The cron schedule for when the deployment should
+                      wake up
+                    type: string
+                required:
+                - sleepSchedule
+                - wakeSchedule
+                type: object
               deployments:
                 description: The deployments that will be slept/woken.
                 items:
@@ -75,19 +91,24 @@ spec:
                   - name
                   type: object
                 type: array
-              sleepTime:
-                description: The time that the deployment will start sleeping
-                type: string
+              standardTime:
+                description: The time that the deployment will wake up and start sleeping
+                properties:
+                  sleepTime:
+                    description: The time that the deployment will start sleeping
+                    type: string
+                  wakeTime:
+                    description: The time that the deployment will wake up
+                    type: string
+                required:
+                - sleepTime
+                - wakeTime
+                type: object
               timezone:
                 description: The timezone that the input times are based in
                 type: string
-              wakeTime:
-                description: The time that the deployment will wake up
-                type: string
             required:
-            - sleepTime
             - timezone
-            - wakeTime
             type: object
           status:
             description: SleepScheduleStatus defines the observed state of SleepSchedule
