@@ -5,9 +5,9 @@ metadata:
   name: dummy
 spec:
   standardTime:
-    wakeTime: "10:00am"
-    sleepTime: "10:01am"
-  timezone: "America/New_York"
+    wakeTime: '10:00am'
+    sleepTime: '10:01am'
+  timezone: 'America/New_York'
   deployments:
   - name: dummy-frontend
   - name: dummy-db
