@@ -76,7 +76,7 @@ spec:
                   - name
                   type: object
                 type: array
-              standardTime:
+              dailyWindow:
                 description: The time that the deployment will wake up and start sleeping
                 type: object
                 properties:

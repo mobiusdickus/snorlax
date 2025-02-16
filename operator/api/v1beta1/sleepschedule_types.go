@@ -23,7 +23,7 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type StandardTime struct {
+type DailyWindow struct {
 	// The time that the deployment will wake up
 	// +kubebuilder:validation:Required
 	WakeTime string `json:"wakeTime"`
@@ -49,7 +49,7 @@ type SleepScheduleSpec struct {
 
 	// The time that the deployment will wake up and start sleeping
 	// +optional
-	StandardTime *StandardTime `json:"standardTime,omitempty"`
+	DailyWindow *DailyWindow `json:"dailyWindow,omitempty"`
 
 	// The cron schedule that will be used to determine when the deployment will sleep/wake
 	// +optional

@@ -54,6 +54,19 @@ spec:
                 - sleepSchedule
                 - wakeSchedule
                 type: object
+              dailyWindow:
+                description: The time that the deployment will wake up and start sleeping
+                properties:
+                  sleepTime:
+                    description: The time that the deployment will start sleeping
+                    type: string
+                  wakeTime:
+                    description: The time that the deployment will wake up
+                    type: string
+                required:
+                - sleepTime
+                - wakeTime
+                type: object
               deployments:
                 description: The deployments that will be slept/woken.
                 items:
@@ -91,19 +104,6 @@ spec:
                   - name
                   type: object
                 type: array
-              standardTime:
-                description: The time that the deployment will wake up and start sleeping
-                properties:
-                  sleepTime:
-                    description: The time that the deployment will start sleeping
-                    type: string
-                  wakeTime:
-                    description: The time that the deployment will wake up
-                    type: string
-                required:
-                - sleepTime
-                - wakeTime
-                type: object
               timezone:
                 description: The timezone that the input times are based in
                 type: string

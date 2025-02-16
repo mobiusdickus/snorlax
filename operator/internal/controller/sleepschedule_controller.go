@@ -55,11 +55,11 @@ type SleepScheduleData struct {
 	Location     *time.Location
 	Now          time.Time
 	Timezone     *time.Location
-	StandardTime *StandardTime
+	DailyWindow  *DailyWindow
 	CronSchedule *CronSchedule
 }
 
-type StandardTime struct {
+type DailyWindow struct {
 	WakeTime  time.Time
 	SleepTime time.Time
 }
@@ -95,8 +95,17 @@ func (r *SleepScheduleReconciler) ProcessSleepSchedule(ctx context.Context, slee
 		return nil, err
 	}
 
-	// Load the wake and sleep times
-	r.loadSleepScheduleDataTime(ctx, sleepSchedule, sleepScheduleData)
+	// Load the wake time(s) and sleep time(s)
+	if sleepSchedule.Spec.DailyWindow != nil {
+		err = r.loadDailyWindow(sleepSchedule.Spec.DailyWindow, sleepScheduleData)
+	} else if sleepSchedule.Spec.CronSchedule != nil {
+		err = r.loadCronSchedule(sleepSchedule.Spec.CronSchedule, sleepScheduleData)
+	}
+
+	if err != nil {
+		log.Error(err, "failed to load wake and sleep times")
+		return nil, err
+	}
 
 	// Load the timezone
 	if sleepSchedule.Spec.Timezone != "" {
@@ -193,7 +202,7 @@ func (r *SleepScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	}
 
 	// Determine if the app should be awake or asleep
-	shouldSleep, err := r.shouldSleep(ctx, sleepScheduleData)
+	shouldSleep, err := r.shouldSleep(sleepScheduleData)
 	if err != nil {
 		log.Error(err, "Failed to determine sleep state")
 		return ctrl.Result{}, err
@@ -357,90 +366,82 @@ func (r *SleepScheduleReconciler) isAppAwake(ctx context.Context, sleepSchedule 
 	return false, nil
 }
 
-func (r *SleepScheduleReconciler) loadSleepScheduleDataTime(ctx context.Context, sleepSchedule *snorlaxv1beta1.SleepSchedule, data *SleepScheduleData) error {
-	log := log.FromContext(ctx)
-	gron := gronx.New()
+func (r *SleepScheduleReconciler) loadDailyWindow(spec *snorlaxv1beta1.DailyWindow, data *SleepScheduleData) error {
+	data.DailyWindow = &DailyWindow{}
 
-	var err error
-
-	switch {
-	case sleepSchedule.Spec.StandardTime != nil:
-		data.StandardTime = &StandardTime{}
-		// Parse the wake time
-		data.StandardTime.WakeTime, err = time.Parse("3:04pm", sleepSchedule.Spec.StandardTime.WakeTime)
-		if err != nil {
-			log.Error(err, "Failed to parse wake time")
-			return err
-		}
-		// Parse the sleep time
-		data.StandardTime.SleepTime, err = time.Parse("3:04pm", sleepSchedule.Spec.StandardTime.SleepTime)
-		if err != nil {
-			log.Error(err, "Failed to parse sleep time")
-			return err
-		}
-	case sleepSchedule.Spec.CronSchedule != nil:
-		data.CronSchedule = &CronSchedule{}
-
-		// Validate the cron wake schedule
-		if !gron.IsValid(sleepSchedule.Spec.CronSchedule.WakeSchedule) {
-			err := fmt.Errorf("invalid cron wake schedule: %s", sleepSchedule.Spec.CronSchedule.WakeSchedule)
-			log.Error(err, "Failed to validate cron wake schedule")
-			return err
-		}
-		data.CronSchedule.WakeSchedule = sleepSchedule.Spec.CronSchedule.WakeSchedule
-		// Validate the cron sleep schedule
-		if !gron.IsValid(sleepSchedule.Spec.CronSchedule.SleepSchedule) {
-			err := fmt.Errorf("invalid cron sleep schedule: %s", sleepSchedule.Spec.CronSchedule.SleepSchedule)
-			log.Error(err, "Failed to validate cron sleep schedule")
-			return err
-		}
-		data.CronSchedule.SleepSchedule = sleepSchedule.Spec.CronSchedule.SleepSchedule
-	default:
-		err := fmt.Errorf("neither standardTime nor cronSchedule was provided")
-		log.Error(err, "neither standardTime nor cronSchedule was provided")
-		return err
+	// Parse the wake time
+	wakeTime, err := time.Parse("3:04pm", spec.WakeTime)
+	if err != nil {
+		return fmt.Errorf("failed to parse wake time: %w", err)
 	}
 
+	// Parse the sleep time
+	sleepTime, err := time.Parse("3:04pm", spec.SleepTime)
+	if err != nil {
+		return fmt.Errorf("failed to parse sleep time: %w", err)
+	}
+
+	data.DailyWindow.WakeTime = wakeTime
+	data.DailyWindow.SleepTime = sleepTime
 	return nil
 }
 
-func (r *SleepScheduleReconciler) shouldSleep(ctx context.Context, data *SleepScheduleData) (bool, error) {
-	log := log.FromContext(ctx)
+func (r *SleepScheduleReconciler) loadCronSchedule(spec *snorlaxv1beta1.CronSchedule, data *SleepScheduleData) error {
+	gron := gronx.New()
+	data.CronSchedule = &CronSchedule{}
+
+	// Validate wake schedule cron format
+	if !gron.IsValid(spec.WakeSchedule) {
+		return fmt.Errorf("invalid cron wake schedule: %s", spec.WakeSchedule)
+	}
+
+	// Validate sleep schedule cron format
+	if !gron.IsValid(spec.SleepSchedule) {
+		return fmt.Errorf("invalid cron sleep schedule: %s", spec.SleepSchedule)
+	}
+
+	data.CronSchedule.WakeSchedule = spec.WakeSchedule
+	data.CronSchedule.SleepSchedule = spec.SleepSchedule
+	return nil
+}
+
+func (r *SleepScheduleReconciler) shouldSleep(data *SleepScheduleData) (bool, error) {
+	if data.DailyWindow == nil && data.CronSchedule == nil {
+		return false, fmt.Errorf("dailyWindow and cronSchedule not defined")
+	}
+
 	now := time.Now().In(data.Location)
 
-	var wakeDatetime, sleepDatetime time.Time
 	var err error
+	var wakeDatetime, sleepDatetime time.Time
 
-	// Handle either StandardTime or CronSchedule schedule types
-	switch {
-	case data.StandardTime != nil:
-		// Get fixed wake time
-		wakeDatetime = time.Date(now.Year(), now.Month(), now.Day(), data.StandardTime.WakeTime.Hour(), data.StandardTime.WakeTime.Minute(), 0, 0, data.Timezone)
-		// Get fixed sleep time
-		sleepDatetime = time.Date(now.Year(), now.Month(), now.Day(), data.StandardTime.SleepTime.Hour(), data.StandardTime.SleepTime.Minute(), 0, 0, data.Timezone)
-	case data.CronSchedule != nil:
-		// Get the next wake time
+	// Handle daily window or cron schedules
+	if data.DailyWindow != nil {
+		// Get the daily wake time and sleep time
+		wakeDatetime = time.Date(now.Year(), now.Month(), now.Day(), data.DailyWindow.WakeTime.Hour(), data.DailyWindow.WakeTime.Minute(), 0, 0, data.Timezone)
+		sleepDatetime = time.Date(now.Year(), now.Month(), now.Day(), data.DailyWindow.SleepTime.Hour(), data.DailyWindow.SleepTime.Minute(), 0, 0, data.Timezone)
+	} else if data.CronSchedule != nil {
+		// Get the next wake time and sleep time
 		wakeDatetime, err = gronx.NextTickAfter(data.CronSchedule.WakeSchedule, now, false)
 		if err != nil {
-			log.Error(err, "Failed to check the next cron wake time")
-			return false, err
+			return false, fmt.Errorf("failed to get next cron wake time: %w", err)
 		}
-		// Get the next sleep time
 		sleepDatetime, err = gronx.NextTickAfter(data.CronSchedule.SleepSchedule, now, false)
 		if err != nil {
-			log.Error(err, "Failed to check the next cron sleep time")
-			return false, err
+			return false, fmt.Errorf("failed to get next cron sleep time: %w", err)
 		}
-	default:
-		err := fmt.Errorf("neither standardTime nor cronSchedule was provided")
-		log.Error(err, "neither standardTime nor cronSchedule was provided")
-		return false, err
 	}
 
+	// Determine if the app should sleep
+	// NOTE: currently the sleep time(s) are prioritized over the wake time(s)
+	shouldSleep := false
 	if wakeDatetime.Before(sleepDatetime) {
-		return now.Before(wakeDatetime) || now.After(sleepDatetime), nil
+		shouldSleep = now.Before(wakeDatetime) || now.After(sleepDatetime)
+	} else {
+		shouldSleep = now.After(sleepDatetime) && now.Before(wakeDatetime)
 	}
-	return now.After(sleepDatetime) && now.Before(wakeDatetime), nil
+
+	return shouldSleep, nil
 }
 
 func (r *SleepScheduleReconciler) wake(ctx context.Context, sleepSchedule *snorlaxv1beta1.SleepSchedule) error {

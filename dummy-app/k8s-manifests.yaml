@@ -4,7 +4,7 @@ metadata:
   namespace: default
   name: dummy
 spec:
-  standardTime:
+  dailyWindow:
     wakeTime: '10:00am'
     sleepTime: '10:01am'
   timezone: 'America/New_York'
