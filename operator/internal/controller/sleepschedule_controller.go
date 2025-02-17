@@ -406,6 +406,7 @@ func (r *SleepScheduleReconciler) loadCronSchedule(spec *snorlaxv1beta1.CronSche
 }
 
 func (r *SleepScheduleReconciler) shouldSleep(data *SleepScheduleData) (bool, error) {
+	// Ensure that either dailyWindow or cronSchedule is defined
 	if data.DailyWindow == nil && data.CronSchedule == nil {
 		return false, fmt.Errorf("dailyWindow and cronSchedule not defined")
 	}

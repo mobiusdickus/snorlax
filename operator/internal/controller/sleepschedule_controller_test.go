@@ -51,6 +51,14 @@ var _ = Describe("SleepSchedule Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
+					// Base spec with example dailyWindow.
+					// NOTE: Controller logic requires exactly one of dailyWindow or cronSchedule.
+					Spec: snorlaxv1beta1.SleepScheduleSpec{
+						DailyWindow: &snorlaxv1beta1.DailyWindow{
+							WakeTime:  "9:00am",
+							SleepTime: "5:00pm",
+						},
+					},
 					// TODO(user): Specify other spec details if needed.
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
