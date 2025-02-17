@@ -107,13 +107,11 @@ spec:
                 type: string
             oneOf:
             - required:
-              - standardTime
+              - dailyWindow
               - timezone
-              type: object
             - required:
               - cronSchedule
               - timezone
-              type: object
           status:
             description: SleepScheduleStatus defines the observed state of SleepSchedule
             properties:
