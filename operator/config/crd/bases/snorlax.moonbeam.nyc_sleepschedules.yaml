@@ -37,6 +37,8 @@ spec:
           metadata:
             type: object
           spec:
+            description: SleepScheduleSpec defines optional and required fields for
+              SleepSchedule
             properties:
               cronSchedule:
                 description: The cron schedule that will be used to determine when
@@ -110,6 +112,9 @@ spec:
             required:
             - timezone
             type: object
+            x-kubernetes-validations:
+            - message: exactly one of dailyWindow or cronSchedule must be specified
+              rule: has(self.dailyWindow) != has(self.cronSchedule)
           status:
             description: SleepScheduleStatus defines the observed state of SleepSchedule
             properties:

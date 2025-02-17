@@ -43,16 +43,16 @@ type CronSchedule struct {
 	SleepSchedule string `json:"sleepSchedule"`
 }
 
+// SleepScheduleSpec defines optional and required fields for SleepSchedule
+// +kubebuilder:validation:XValidation:rule="has(self.dailyWindow) != has(self.cronSchedule)",message="exactly one of dailyWindow or cronSchedule must be specified"
 type SleepScheduleSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// The time that the deployment will wake up and start sleeping
-	// +optional
 	DailyWindow *DailyWindow `json:"dailyWindow,omitempty"`
 
 	// The cron schedule that will be used to determine when the deployment will sleep/wake
-	// +optional
 	CronSchedule *CronSchedule `json:"cronSchedule,omitempty"`
 
 	// The timezone that the input times are based in
