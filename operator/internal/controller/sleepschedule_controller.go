@@ -169,9 +169,10 @@ func (r *SleepScheduleReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	// Update status based on the actual check
+	// Update status using patch to handle stale resource versions
+	original := sleepSchedule.DeepCopy()
 	sleepSchedule.Status.Awake = awake
-	err = r.Status().Update(ctx, sleepSchedule)
+	err = r.Status().Patch(ctx, sleepSchedule, client.MergeFrom(original))
 	if err != nil {
 		log.Error(err, "failed to update SleepSchedule status")
 		return ctrl.Result{}, err
@@ -406,7 +407,7 @@ func (r *SleepScheduleReconciler) loadCronSchedule(spec *snorlaxv1beta1.CronSche
 }
 
 func (r *SleepScheduleReconciler) shouldSleep(data *SleepScheduleData) (bool, error) {
-	// Ensure that either dailyWindow or cronSchedule is defined
+	// Check that either dailyWindow or cronSchedule is defined
 	if data.DailyWindow == nil && data.CronSchedule == nil {
 		return false, fmt.Errorf("dailyWindow and cronSchedule not defined")
 	}
