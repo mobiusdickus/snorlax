@@ -77,8 +77,7 @@ spec:
                   type: object
                 type: array
               dailyWindow:
-                description: The time that the deployment will wake up and start sleeping
-                type: object
+                description: The daily times that the deployment will wake up and start sleeping
                 properties:
                   wakeTime:
                     description: The time that the deployment will wake up
@@ -89,9 +88,9 @@ spec:
                 required:
                 - wakeTime
                 - sleepTime
+                type: object
               cronSchedule:
                 description: The cron schedule that will be used to determine when the deployment will sleep/wake
-                type: object
                 properties:
                   wakeSchedule:
                     description: The cron schedule for when the deployment should wake up
@@ -102,6 +101,7 @@ spec:
                 required:
                 - wakeSchedule
                 - sleepSchedule
+                type: object
               timezone:
                 description: The timezone that the input times are based in
                 type: string
@@ -112,6 +112,7 @@ spec:
             - required:
               - cronSchedule
               - timezone
+            type: object
           status:
             description: SleepScheduleStatus defines the observed state of SleepSchedule
             properties:
