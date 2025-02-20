@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	snorlaxv1beta1 "moonbeam-nyc/snorlax/api/v1beta1"
+	util "moonbeam-nyc/snorlax/internal/util"
 	"strconv"
 	"sync"
 	"time"
@@ -49,6 +50,7 @@ type key string
 type SleepScheduleReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Clock  util.Clock
 }
 
 type SleepScheduleData struct {
@@ -82,6 +84,18 @@ const finalizer = "finalizer.snorlax.moonbeam.nyc"
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=roles,verbs=get;watch;list;create;delete
 //+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;watch;list;create;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;watch;list
+
+// NewReconciler constructs a new SleepScheduleReconciler with required fields
+func NewReconciler(client client.Client, scheme *runtime.Scheme, clock util.Clock) *SleepScheduleReconciler {
+	if clock == nil {
+		clock = util.RealTime{}
+	}
+	return &SleepScheduleReconciler{
+		Client: client,
+		Scheme: scheme,
+		Clock:  clock,
+	}
+}
 
 func (r *SleepScheduleReconciler) ProcessSleepSchedule(ctx context.Context, sleepSchedule *snorlaxv1beta1.SleepSchedule) (*SleepScheduleData, error) {
 	log := log.FromContext(ctx)
