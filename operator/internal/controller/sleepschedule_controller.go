@@ -55,7 +55,6 @@ type SleepScheduleReconciler struct {
 
 type SleepScheduleData struct {
 	Location     *time.Location
-	Now          time.Time
 	Timezone     *time.Location
 	DailyWindow  *DailyWindow
 	CronSchedule *CronSchedule
@@ -396,14 +395,18 @@ func (r *SleepScheduleReconciler) loadDailyWindow(spec *snorlaxv1beta1.DailyWind
 		return fmt.Errorf("failed to parse sleep time: %w", err)
 	}
 
-	data.DailyWindow.WakeTime = wakeTime
-	data.DailyWindow.SleepTime = sleepTime
+	// Get current time in the timezone
+	now := r.Clock.Now(data.Location)
+
+	// Set the wake and sleep datetimes
+	data.DailyWindow.WakeTime = time.Date(now.Year(), now.Month(), now.Day(), wakeTime.Hour(), wakeTime.Minute(), 0, 0, data.Timezone)
+	data.DailyWindow.SleepTime = time.Date(now.Year(), now.Month(), now.Day(), sleepTime.Hour(), sleepTime.Minute(), 0, 0, data.Timezone)
 	return nil
 }
 
 func (r *SleepScheduleReconciler) loadCronSchedule(spec *snorlaxv1beta1.CronSchedule, data *SleepScheduleData) error {
-	gron := gronx.New()
 	data.CronSchedule = &CronSchedule{}
+	gron := gronx.New()
 
 	// Validate wake schedule cron format
 	if !gron.IsValid(spec.WakeSchedule) {
@@ -426,16 +429,17 @@ func (r *SleepScheduleReconciler) shouldSleep(data *SleepScheduleData) (bool, er
 		return false, fmt.Errorf("dailyWindow and cronSchedule not defined")
 	}
 
-	now := time.Now().In(data.Location)
-
 	var err error
 	var wakeDatetime, sleepDatetime time.Time
+
+	// Get the current time
+	now := r.Clock.Now(data.Location)
 
 	// Handle daily window or cron schedules
 	if data.DailyWindow != nil {
 		// Get the daily wake time and sleep time
-		wakeDatetime = time.Date(now.Year(), now.Month(), now.Day(), data.DailyWindow.WakeTime.Hour(), data.DailyWindow.WakeTime.Minute(), 0, 0, data.Timezone)
-		sleepDatetime = time.Date(now.Year(), now.Month(), now.Day(), data.DailyWindow.SleepTime.Hour(), data.DailyWindow.SleepTime.Minute(), 0, 0, data.Timezone)
+		wakeDatetime = data.DailyWindow.WakeTime
+		sleepDatetime = data.DailyWindow.SleepTime
 	} else if data.CronSchedule != nil {
 		// Get the next wake time and sleep time
 		wakeDatetime, err = gronx.NextTickAfter(data.CronSchedule.WakeSchedule, now, false)
