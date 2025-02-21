@@ -104,8 +104,20 @@ func (r *SleepScheduleReconciler) ProcessSleepSchedule(ctx context.Context, slee
 	var err error
 	sleepScheduleData.Location, err = time.LoadLocation(sleepSchedule.Spec.Timezone)
 	if err != nil {
-		log.Error(err, "failed to load timezone")
+		log.Error(err, "failed to load location")
 		return nil, err
+	}
+
+	// Load the timezone
+	if sleepSchedule.Spec.Timezone != "" {
+		var err error
+		sleepScheduleData.Timezone, err = time.LoadLocation(sleepSchedule.Spec.Timezone)
+		if err != nil {
+			log.Error(err, "failed to load timezone")
+			return nil, err
+		}
+	} else {
+		sleepScheduleData.Timezone = time.UTC
 	}
 
 	// Load the wake time(s) and sleep time(s)
@@ -118,18 +130,6 @@ func (r *SleepScheduleReconciler) ProcessSleepSchedule(ctx context.Context, slee
 	if err != nil {
 		log.Error(err, "failed to load wake and sleep times")
 		return nil, err
-	}
-
-	// Load the timezone
-	if sleepSchedule.Spec.Timezone != "" {
-		var err error
-		sleepScheduleData.Timezone, err = time.LoadLocation(sleepSchedule.Spec.Timezone)
-		if err != nil {
-			log.Error(err, "failed to load time zone")
-			return nil, err
-		}
-	} else {
-		sleepScheduleData.Timezone = time.UTC
 	}
 
 	return sleepScheduleData, nil
@@ -423,45 +423,94 @@ func (r *SleepScheduleReconciler) loadCronSchedule(spec *snorlaxv1beta1.CronSche
 	return nil
 }
 
-func (r *SleepScheduleReconciler) shouldSleep(data *SleepScheduleData) (bool, error) {
-	// Check that either dailyWindow or cronSchedule is defined
-	if data.DailyWindow == nil && data.CronSchedule == nil {
-		return false, fmt.Errorf("dailyWindow and cronSchedule not defined")
+// findLastScheduledTime finds the most recent scheduled time before the reference time
+func findLastScheduledTime(cronExpr string, refTime time.Time) (time.Time, error) {
+	// Start looking from 7 days ago to handle weekly schedules
+	checkTime := refTime.AddDate(0, 0, -7)
+	var lastTime time.Time
+
+	for checkTime.Before(refTime) {
+		nextTime, err := gronx.NextTickAfter(cronExpr, checkTime, false)
+		if err != nil {
+			return time.Time{}, err
+		}
+
+		if nextTime.After(refTime) {
+			break
+		}
+
+		lastTime = nextTime
+		checkTime = nextTime.Add(time.Second)
 	}
 
+	return lastTime, nil
+}
+
+func (r *SleepScheduleReconciler) shouldSleep(data *SleepScheduleData) (bool, error) {
+	shouldSleep := false
 	var err error
-	var wakeDatetime, sleepDatetime time.Time
+
+	// Check that either dailyWindow or cronSchedule is defined
+	if data.DailyWindow == nil && data.CronSchedule == nil {
+		err = fmt.Errorf("dailyWindow and cronSchedule not defined")
+		return shouldSleep, err
+	}
 
 	// Get the current time
 	now := r.Clock.Now(data.Location)
 
-	// Handle daily window or cron schedules
+	// Handle daily window case
 	if data.DailyWindow != nil {
-		// Get the daily wake time and sleep time
-		wakeDatetime = data.DailyWindow.WakeTime
-		sleepDatetime = data.DailyWindow.SleepTime
+		wakeDatetime := data.DailyWindow.WakeTime
+		sleepDatetime := data.DailyWindow.SleepTime
+
+		if wakeDatetime.Before(sleepDatetime) {
+			shouldSleep = now.Before(wakeDatetime) || now.After(sleepDatetime)
+		} else {
+			shouldSleep = now.After(sleepDatetime) && now.Before(wakeDatetime)
+		}
 	} else if data.CronSchedule != nil {
-		// Get the next wake time and sleep time
-		wakeDatetime, err = gronx.NextTickAfter(data.CronSchedule.WakeSchedule, now, false)
+		// Find the most recent wake and sleep times before now
+		var lastWake, lastSleep time.Time
+		lastWake, err = findLastScheduledTime(data.CronSchedule.WakeSchedule, now)
 		if err != nil {
-			return false, fmt.Errorf("failed to get next cron wake time: %w", err)
+			err = fmt.Errorf("failed to get last wake schedule time: %w", err)
+			return shouldSleep, err
 		}
-		sleepDatetime, err = gronx.NextTickAfter(data.CronSchedule.SleepSchedule, now, false)
+
+		lastSleep, err = findLastScheduledTime(data.CronSchedule.SleepSchedule, now)
 		if err != nil {
-			return false, fmt.Errorf("failed to get next cron sleep time: %w", err)
+			err = fmt.Errorf("failed to get last sleep schedule time: %w", err)
+			return shouldSleep, err
+		}
+
+		// Find the next wake and sleep times after now
+		var nextWake, nextSleep time.Time
+		nextWake, err = gronx.NextTickAfter(data.CronSchedule.WakeSchedule, now, false)
+		if err != nil {
+			err = fmt.Errorf("failed to get next wake schedule time: %w", err)
+			return shouldSleep, err
+		}
+
+		nextSleep, err = gronx.NextTickAfter(data.CronSchedule.SleepSchedule, now, false)
+		if err != nil {
+			err = fmt.Errorf("failed to get next sleep schedule time: %w", err)
+			return shouldSleep, err
+		}
+
+		// If we have no previous events, use only the next events
+		if lastWake.IsZero() && lastSleep.IsZero() {
+			shouldSleep = !nextWake.Before(nextSleep) // Sleep until first wake
+		} else if lastSleep.After(lastWake) && now.Before(nextWake) {
+			// If the last event was asleep and we haven't reached the next wake time
+			shouldSleep = true
+		} else if lastWake.After(lastSleep) && now.Before(nextSleep) {
+			// If the last event was a wake and we haven't reached the next sleep time
+			shouldSleep = false
 		}
 	}
 
-	// Determine if the app should sleep
-	// NOTE: currently the sleep time(s) are prioritized over the wake time(s)
-	shouldSleep := false
-	if wakeDatetime.Before(sleepDatetime) {
-		shouldSleep = now.Before(wakeDatetime) || now.After(sleepDatetime)
-	} else {
-		shouldSleep = now.After(sleepDatetime) && now.Before(wakeDatetime)
-	}
-
-	return shouldSleep, nil
+	return shouldSleep, err
 }
 
 func (r *SleepScheduleReconciler) wake(ctx context.Context, sleepSchedule *snorlaxv1beta1.SleepSchedule) error {
