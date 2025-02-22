@@ -322,19 +322,19 @@ var _ = Describe("SleepSchedule Controller", func() {
 			err := k8sClient.Get(ctx, typeNamespacedName, existingSchedule)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Updating the SleepSchedule with CronSchedule for 12am wake every weekday and 12am sleep every weekend")
+			By("Updating the SleepSchedule with CronSchedule for 8am wake every weekday and 10pm sleep every day")
 			existingSchedule.Spec.DailyWindow = nil
 			existingSchedule.Spec.CronSchedule = &snorlaxv1beta1.CronSchedule{
-				WakeSchedule:  "0 0 * * 1-5", // Every weekday at midnight
-				SleepSchedule: "0 0 * * 6,7", // Every weekend at midnight
+				WakeSchedule:  "0 8 * * 1-5", // Every weekday at 8am
+				SleepSchedule: "0 22 * * *",  // Every day at 10pm
 			}
 			Expect(k8sClient.Update(ctx, existingSchedule)).To(Succeed())
 
-			By("Setting the current time to 12:01am on a weekday")
+			By("Setting the current time to 9:30pm on a weekday")
 			location, err := time.LoadLocation(existingSchedule.Spec.Timezone)
 			Expect(err).NotTo(HaveOccurred())
 			timeStub := util.MockTime{
-				Time: time.Date(2025, 1, 1, 0, 1, 0, 0, location), // 12:01am on a Wednesday
+				Time: time.Date(2025, 1, 1, 21, 30, 0, 0, location), // 9:30pm on a Wednesday
 			}
 
 			// Create reconciler
@@ -354,25 +354,63 @@ var _ = Describe("SleepSchedule Controller", func() {
 			Expect(shouldBeAsleep).To(BeFalse())
 		})
 
-		It("should reconcile sleep schedule with CronSchedule to be asleep during weekends", func() {
+		It("should reconcile sleep schedule with CronSchedule to be asleep during weekdays", func() {
 			// Get the existing SleepSchedule created by BeforeEach
 			existingSchedule := &snorlaxv1beta1.SleepSchedule{}
 			err := k8sClient.Get(ctx, typeNamespacedName, existingSchedule)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Updating the SleepSchedule with CronSchedule for 12am wake every weekday and 12am sleep every weekend")
+			By("Updating the SleepSchedule with CronSchedule for 8am wake every weekday and 10pm sleep every day")
 			existingSchedule.Spec.DailyWindow = nil
 			existingSchedule.Spec.CronSchedule = &snorlaxv1beta1.CronSchedule{
-				WakeSchedule:  "0 0 * * 1-5", // Every weekday at midnight
-				SleepSchedule: "0 0 * * 6,7", // Every weekend at midnight
+				WakeSchedule:  "0 8 * * 1-5", // Every weekday at 8am
+				SleepSchedule: "0 22 * * *",  // Every day at 10pm
 			}
 			Expect(k8sClient.Update(ctx, existingSchedule)).To(Succeed())
 
-			By("Setting the current time to 12:01am on a weekend")
+			By("Setting the current time to 10:01pm")
 			location, err := time.LoadLocation(existingSchedule.Spec.Timezone)
 			Expect(err).NotTo(HaveOccurred())
 			timeStub := util.MockTime{
-				Time: time.Date(2025, 1, 4, 0, 1, 0, 0, location), // 12:01am on a Saturday
+				Time: time.Date(2025, 1, 3, 22, 1, 0, 0, location), // 10:01pm on a Friday
+			}
+
+			// Create reconciler
+			reconciler := NewReconciler(
+				k8sClient,
+				k8sClient.Scheme(),
+				timeStub,
+			)
+
+			By("Processing the SleepSchedule")
+			scheduleData, err := reconciler.ProcessSleepSchedule(ctx, existingSchedule)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking that the SleepSchedule should be asleep")
+			shouldBeAsleep, err := reconciler.shouldSleep(scheduleData)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(shouldBeAsleep).To(BeTrue())
+		})
+
+		It("should reconcile sleep schedule with CronSchedule to be awake during weekends", func() {
+			// Get the existing SleepSchedule created by BeforeEach
+			existingSchedule := &snorlaxv1beta1.SleepSchedule{}
+			err := k8sClient.Get(ctx, typeNamespacedName, existingSchedule)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Updating the SleepSchedule with CronSchedule for 8am wake every weekday and 10pm sleep every day")
+			existingSchedule.Spec.DailyWindow = nil
+			existingSchedule.Spec.CronSchedule = &snorlaxv1beta1.CronSchedule{
+				WakeSchedule:  "0 8 * * 1-5", // Every weekday at 8am
+				SleepSchedule: "0 22 * * *",  // Every day at 10pm
+			}
+			Expect(k8sClient.Update(ctx, existingSchedule)).To(Succeed())
+
+			By("Setting the current time to 3:00pm on a weekend")
+			location, err := time.LoadLocation(existingSchedule.Spec.Timezone)
+			Expect(err).NotTo(HaveOccurred())
+			timeStub := util.MockTime{
+				Time: time.Date(2025, 1, 4, 15, 0, 0, 0, location), // 3:00pm on a Saturday
 			}
 
 			// Create reconciler
