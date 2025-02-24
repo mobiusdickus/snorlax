@@ -82,13 +82,14 @@ As a common example, if you sleep all of your staging/ephemeral deployments for 
       # Required fields
       cronSchedule:
         wakeSchedule: '0 8 * * 1-5'  # Wake at 8am on weekdays
-        sleepSchedule: '0 22 * * *'  # Sleep at 10pm every day
+        sleepSchedule: '0 22 * * *'  # Sleep at 10pm daily
       timezone: 'America/New_York'
       deployments:
       - name: your-app-frontend
       - name: your-app-db
       - name: your-app-redis
 
+      # Optional fields
       ingresses:
       - name: your-app-ingress
         requires:
@@ -141,7 +142,6 @@ make dev-run
 - Scale entire namespaces
 - Sleep when no requests are received for a certain period of time
 - Add support for custom wake & sleep actions (e.g. hit a webhook on wake)
-- Add support for cron-style schedules (e.g. `0 8 * * *`)
 - Add a button to manually wake up the deployment (instead of auto-waking on request)
 - Custom image/gif for sleeping page
 - Always sleeping mode, reset at a certain time of day
