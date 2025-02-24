@@ -411,7 +411,6 @@ func (r *SleepScheduleReconciler) loadCronSchedule(spec *snorlaxv1beta1.CronSche
 	return nil
 }
 
-// findLastScheduledTime finds the most recent scheduled time before the reference time
 func findLastScheduledTime(cronExpr string, refTime time.Time) (time.Time, error) {
 	// Start looking from 7 days ago to handle weekly schedules
 	checkTime := refTime.AddDate(0, 0, -7)
@@ -486,6 +485,7 @@ func (r *SleepScheduleReconciler) shouldSleep(data *SleepScheduleData) (bool, er
 			return shouldSleep, err
 		}
 
+		// NOTE: If two times (sleep and wake) overlap, implicityly defaults to wake
 		// If we have no previous events, use only the next events
 		if lastWake.IsZero() && lastSleep.IsZero() {
 			shouldSleep = !nextWake.Before(nextSleep) // Sleep until first wake
