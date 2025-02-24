@@ -51,11 +51,13 @@ As a common example, if you sleep all of your staging/ephemeral deployments for 
       dailyWindow:
         wakeTime: '8:00am'
         sleepTime: '10:00pm'
-      timezone: 'America/New_York'
       deployments:
       - name: your-app-frontend
       - name: your-app-db
       - name: your-app-redis
+
+      # (optional, defaults to UTC) timezone for the sleep schedule using IANA format
+      timezone: 'America/New_York'
 
       # (optional) the ingresses to update and point to the snorlax wake server,
       # which wakes your deployment when a request is received while it's
@@ -83,13 +85,13 @@ As a common example, if you sleep all of your staging/ephemeral deployments for 
       cronSchedule:
         wakeSchedule: '0 8 * * 1-5'  # Wake at 8am on weekdays
         sleepSchedule: '0 22 * * *'  # Sleep at 10pm daily
-      timezone: 'America/New_York'
       deployments:
       - name: your-app-frontend
       - name: your-app-db
       - name: your-app-redis
 
       # Optional fields
+      timezone: 'America/New_York'
       ingresses:
       - name: your-app-ingress
         requires:

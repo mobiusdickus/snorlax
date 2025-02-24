@@ -56,7 +56,7 @@ type SleepScheduleSpec struct {
 	CronSchedule *CronSchedule `json:"cronSchedule,omitempty"`
 
 	// The timezone that the input times are based in
-	// +kubebuilder:validation:Required
+	// +optional
 	Timezone string `json:"timezone"`
 
 	// The deployments that will be slept/woken.

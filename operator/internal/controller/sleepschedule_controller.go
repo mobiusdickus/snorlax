@@ -54,7 +54,6 @@ type SleepScheduleReconciler struct {
 }
 
 type SleepScheduleData struct {
-	Location     *time.Location
 	Timezone     *time.Location
 	DailyWindow  *DailyWindow
 	CronSchedule *CronSchedule
@@ -100,24 +99,13 @@ func (r *SleepScheduleReconciler) ProcessSleepSchedule(ctx context.Context, slee
 	log := log.FromContext(ctx)
 	sleepScheduleData := &SleepScheduleData{}
 
-	// Load location
-	var err error
-	sleepScheduleData.Location, err = time.LoadLocation(sleepSchedule.Spec.Timezone)
-	if err != nil {
-		log.Error(err, "failed to load location")
-		return nil, err
-	}
-
 	// Load the timezone
-	if sleepSchedule.Spec.Timezone != "" {
-		var err error
-		sleepScheduleData.Timezone, err = time.LoadLocation(sleepSchedule.Spec.Timezone)
-		if err != nil {
-			log.Error(err, "failed to load timezone")
-			return nil, err
-		}
-	} else {
-		sleepScheduleData.Timezone = time.UTC
+	// NOTE: time.LoadLocation defaults to UTC if not specified
+	var err error
+	sleepScheduleData.Timezone, err = time.LoadLocation(sleepSchedule.Spec.Timezone)
+	if err != nil {
+		log.Error(err, "failed to load timezone")
+		return nil, err
 	}
 
 	// Load the wake time(s) and sleep time(s)
@@ -396,7 +384,7 @@ func (r *SleepScheduleReconciler) loadDailyWindow(spec *snorlaxv1beta1.DailyWind
 	}
 
 	// Get current time in the timezone
-	now := r.Clock.Now(data.Location)
+	now := r.Clock.Now(data.Timezone)
 
 	// Set the wake and sleep datetimes
 	data.DailyWindow.WakeTime = time.Date(now.Year(), now.Month(), now.Day(), wakeTime.Hour(), wakeTime.Minute(), 0, 0, data.Timezone)
@@ -457,7 +445,7 @@ func (r *SleepScheduleReconciler) shouldSleep(data *SleepScheduleData) (bool, er
 	}
 
 	// Get the current time
-	now := r.Clock.Now(data.Location)
+	now := r.Clock.Now(data.Timezone)
 
 	// Handle daily window case
 	if data.DailyWindow != nil {

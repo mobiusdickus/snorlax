@@ -109,8 +109,6 @@ spec:
               timezone:
                 description: The timezone that the input times are based in
                 type: string
-            required:
-            - timezone
             type: object
             x-kubernetes-validations:
             - message: exactly one of dailyWindow or cronSchedule must be specified
